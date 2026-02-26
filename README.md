@@ -70,10 +70,22 @@ npm run dev
 
 Once both are running:
 
-| Service | URL |
-|---------|-----|
-| Frontend | http://localhost:5173 |
-| Backend API | http://localhost:8000/api |
+| Service | URL | Where it's set |
+|---------|-----|----------------|
+| **Frontend** | http://localhost:5173 | `frontend/vite.config.js` → `server.port` |
+| **Backend (Laravel)** | http://localhost:8000 | Backend root; run with `php artisan serve` (default port 8000). Override with `APP_URL` in `.env` if you use another port. |
+| **Backend API** | http://localhost:8000/api | All API routes are under `/api`. The frontend dev server proxies `/api` and `/storage` to the backend (see `frontend/vite.config.js` → `server.proxy`). |
+
+So when using the app in the browser you open **http://localhost:5173**; API and storage requests from the frontend go to the backend URL above via the Vite proxy.
+
+**Using a different backend port (e.g. 8002)**  
+The frontend dev server proxies `/api` and `/storage` to the backend. That proxy target was previously hardcoded to `http://localhost:8000`. It is now configurable:
+
+- If you run the backend on another port, e.g. `php artisan serve --port=8002`, set in **`frontend/.env`**:
+  ```bash
+  VITE_API_TARGET=http://localhost:8002
+  ```
+- Copy from `frontend/.env.example` if needed. Then **restart the frontend dev server** (`npm run dev`) so the new target is used. If you don’t set `VITE_API_TARGET`, it defaults to `http://localhost:8000`.
 
 ### Default Super Admin Login
 
