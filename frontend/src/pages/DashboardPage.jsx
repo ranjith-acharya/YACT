@@ -35,7 +35,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [viewMember, setViewMember] = useState(null);
   const [navHistory, setNavHistory] = useState([]);
-  const { user } = useAuth();
+  const { user, hasAnyRole } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -76,11 +76,11 @@ export default function DashboardPage() {
   }
 
   const stats = [
-    { label: 'Total Users', value: data?.stats?.total_users, icon: UsersIcon, color: 'text-blue-600 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400', href: '/users' },
-    { label: 'Active Members', value: data?.stats?.active_members, icon: UserGroupIcon, color: 'text-emerald-600 bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-400', href: '/members' },
-    { label: 'Pending Requests', value: data?.stats?.pending_requests, icon: ClipboardDocumentListIcon, color: 'text-amber-600 bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400', href: '/member-requests' },
-    { label: 'Upcoming Events', value: data?.stats?.upcoming_events, icon: CalendarIcon, color: 'text-purple-600 bg-purple-100 dark:bg-purple-900/30 dark:text-purple-400', href: '/events' },
-  ];
+    { label: 'Total Users', value: data?.stats?.total_users, icon: UsersIcon, color: 'text-blue-600 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400', href: '/users', roles: ['Admin', 'Super Admin'] },
+    { label: 'Active Members', value: data?.stats?.active_members, icon: UserGroupIcon, color: 'text-emerald-600 bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-400', href: '/members', roles: null },
+    { label: 'Pending Requests', value: data?.stats?.pending_requests, icon: ClipboardDocumentListIcon, color: 'text-amber-600 bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400', href: '/member-requests', roles: ['Sub-Manager', 'Manager', 'Admin', 'Super Admin'] },
+    { label: 'Upcoming Events', value: data?.stats?.upcoming_events, icon: CalendarIcon, color: 'text-purple-600 bg-purple-100 dark:bg-purple-900/30 dark:text-purple-400', href: '/events', roles: null },
+  ].filter((s) => !s.roles || hasAnyRole(...s.roles));
 
   return (
     <div className="space-y-6">
