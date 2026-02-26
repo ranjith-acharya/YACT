@@ -25,10 +25,26 @@ export default function NotificationBell() {
     } catch {}
   }, []);
 
+  // Poll only when tab is visible; refetch when user returns to tab. Avoids constant hits in background.
+  const POLL_INTERVAL_MS = 60_000; // 1 min when visible (was 15s always)
+
   useEffect(() => {
-    fetchUnread();
-    const interval = setInterval(fetchUnread, 15000);
-    return () => clearInterval(interval);
+    const tick = () => {
+      if (document.visibilityState === 'visible') fetchUnread();
+    };
+
+    tick(); // initial fetch
+    const interval = setInterval(tick, POLL_INTERVAL_MS);
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') fetchUnread(); // refetch as soon as user comes back
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
   }, [fetchUnread]);
 
   useEffect(() => {
