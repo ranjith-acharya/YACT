@@ -456,7 +456,7 @@ function EditInfoSection({ form, onChange, email, phone, areas, groupedAreas, ar
       <div ref={areaRef} className="relative">
         <label className={labelCls}>Area</label>
         <div onClick={() => setShowAreaDd(!showAreaDd)}
-          className={`w-full px-3 py-2 text-sm rounded-lg border cursor-pointer flex items-center justify-between ${form.area_id ? 'border-emerald-400' : 'border-surface-300 dark:border-dark-border'} bg-white dark:bg-dark-bg text-surface-900 dark:text-surface-100`}>
+          className="w-full px-3 py-2 text-sm rounded-lg border border-surface-300 dark:border-dark-border cursor-pointer flex items-center justify-between bg-white dark:bg-dark-bg text-surface-900 dark:text-surface-100">
           <span className={form.area_id ? '' : 'text-surface-400'}>{form.area_id ? getAreaName(form.area_id) : 'Select area...'}</span>
           <svg className="h-4 w-4 text-surface-400 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
         </div>
