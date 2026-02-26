@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { PlusIcon, TrashIcon, UserPlusIcon, XMarkIcon, CameraIcon, EyeIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, TrashIcon, UserPlusIcon, XMarkIcon, CameraIcon, EyeIcon, ArrowDownTrayIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline';
 import { memberRequestService } from '../services/memberRequestService';
 import { areaService } from '../services/areaService';
 import StatusBadge from '../components/StatusBadge';
@@ -152,6 +152,8 @@ export default function MemberRequestsPage() {
   const [viewRequest, setViewRequest] = useState(null);
   const [areas, setAreas] = useState([]);
   const [groupedAreas, setGroupedAreas] = useState({});
+  const [importLoading, setImportLoading] = useState(false);
+  const bulkInputRef = useRef(null);
   const [areaSearch, setAreaSearch] = useState('');
   const [showAreaDropdown, setShowAreaDropdown] = useState(false);
   const areaRef = useRef(null);
@@ -392,6 +394,73 @@ export default function MemberRequestsPage() {
     }
   };
 
+  const handleDownloadTemplate = async () => {
+    try {
+      const { data } = await memberRequestService.downloadTemplate();
+      const url = URL.createObjectURL(data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'member-requests-template.xlsx';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      Swal.fire({ icon: 'error', title: 'Download failed', text: 'Could not download template.', confirmButtonColor: '#5c7cfa' });
+    }
+  };
+
+  const handleBulkImport = async (e) => {
+    const file = e?.target?.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    setImportLoading(true);
+
+    const showResult = (data) => {
+      const failed = data.failed ?? 0;
+      const created = data.created ?? 0;
+      const errors = data.errors ?? [];
+      const msg = data.message || `${created} created, ${failed} failed.`;
+
+      let html = `<p class="mb-1">${msg}</p>`;
+      if (errors.length > 0) {
+        const hasEmail = errors.some((e) => e.email != null && e.email !== '');
+        const hasPhone = errors.some((e) => e.phone != null && e.phone !== '');
+        let header = '<thead><tr class="border-b border-gray-300"><th class="py-2 px-2 text-left text-xs font-semibold uppercase text-gray-500 w-12">Row</th><th class="py-2 px-2 text-left text-xs font-semibold uppercase text-gray-500 whitespace-nowrap">Name</th>';
+        if (hasEmail) header += '<th class="py-2 px-2 text-left text-xs font-semibold uppercase text-gray-500 min-w-[140px]">Email</th>';
+        if (hasPhone) header += '<th class="py-2 px-2 text-left text-xs font-semibold uppercase text-gray-500 min-w-[100px]">Phone</th>';
+        header += '<th class="py-2 px-2 text-left text-xs font-semibold uppercase text-gray-500 min-w-[280px]">Issue</th></tr></thead><tbody>';
+        html += '<div class="text-left mt-3 max-h-[50vh] overflow-auto"><table class="w-full text-sm border-collapse" style="min-width: 520px">' + header;
+        const colCount = 3 + (hasEmail ? 1 : 0) + (hasPhone ? 1 : 0);
+        errors.slice(0, 20).forEach((err) => {
+          html += `<tr class="border-b border-gray-200"><td class="py-2 px-2 font-medium">${err.row}</td><td class="py-2 px-2 whitespace-nowrap">${err.name ?? '—'}</td>`;
+          if (hasEmail) html += `<td class="py-2 px-2 text-gray-700 break-all">${err.email ?? '—'}</td>`;
+          if (hasPhone) html += `<td class="py-2 px-2 text-gray-700">${err.phone ?? '—'}</td>`;
+          html += `<td class="py-2 px-2 text-red-600 align-top" style="min-width: 260px">${err.message}</td></tr>`;
+        });
+        if (errors.length > 20) html += `<tr><td colspan="${colCount}" class="py-2 px-2 text-gray-500">... and ${errors.length - 20} more</td></tr>`;
+        html += '</tbody></table></div>';
+      }
+
+      const icon = created > 0 ? 'success' : (failed > 0 ? 'warning' : 'info');
+      Swal.fire({ icon, title: created > 0 ? 'Bulk Import' : 'Import Result', html, confirmButtonColor: '#5c7cfa', width: 720 });
+      if (created > 0 || failed > 0) memberRequestService.getAll().then(({ data }) => setRequests(data.data || [])).catch(() => {});
+    };
+
+    try {
+      const response = await memberRequestService.bulkImport(file);
+      showResult(response?.data ?? {});
+    } catch (err) {
+      const data = err?.response?.data;
+      if (data && (data.created !== undefined || data.failed !== undefined || data.errors)) {
+        showResult(data);
+      } else {
+        const msg = data?.message || err?.message || 'Something went wrong during import.';
+        Swal.fire({ icon: 'error', title: 'Import Error', html: `<p>${msg}</p>`, confirmButtonColor: '#5c7cfa' });
+      }
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
   const handleApprove = async (id) => {
     const result = await Swal.fire({
       title: 'Approve this request?',
@@ -407,19 +476,40 @@ export default function MemberRequestsPage() {
       const { data } = await memberRequestService.approve(id, '');
       setRequests((prev) => prev.map((r) => (r.id === id ? { ...r, status: 'approved' } : r)));
 
+      let credentialsHtml = '';
       if (data.credentials) {
+        credentialsHtml = `
+          <p class="mb-3">Member account has been created with the following credentials:</p>
+          <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;text-align:left;font-size:14px;">
+            <p><strong>Email:</strong> ${data.credentials.email}</p>
+            <p class="mt-1"><strong>Password:</strong> ${data.credentials.password}</p>
+          </div>
+          <p class="mt-3 text-xs" style="color:#6b7280;">Please share these credentials with the member securely.</p>
+        `;
+      }
+
+      let autoLinkHtml = '';
+      if (data.auto_linked) {
+        const methodLabel = data.auto_linked.method === 'email' ? 'email match' : "father's name match";
+        autoLinkHtml = `
+          <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px 16px;text-align:left;font-size:14px;margin-top:12px;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+              <span style="background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:9999px;font-size:11px;font-weight:600;">Auto-linked</span>
+              <span style="background:#e0e7ff;color:#4338ca;padding:2px 8px;border-radius:9999px;font-size:11px;font-weight:500;">${methodLabel}</span>
+            </div>
+            <p style="margin:6px 0 0;"><strong>Linked to parent:</strong> ${data.auto_linked.parent_name}</p>
+            <p style="margin:6px 0 0;font-size:12px;color:#6b7280;">Is this correct? If not, you can manually change or remove the link from the member's detail view.</p>
+          </div>
+        `;
+      }
+
+      if (credentialsHtml || autoLinkHtml) {
         Swal.fire({
           icon: 'success',
           title: 'Approved!',
-          html: `
-            <p class="mb-3">Member account has been created with the following credentials:</p>
-            <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;text-align:left;font-size:14px;">
-              <p><strong>Email:</strong> ${data.credentials.email}</p>
-              <p class="mt-1"><strong>Password:</strong> ${data.credentials.password}</p>
-            </div>
-            <p class="mt-3 text-xs" style="color:#6b7280;">Please share these credentials with the member securely.</p>
-          `,
+          html: credentialsHtml + autoLinkHtml,
           confirmButtonColor: '#5c7cfa',
+          width: 520,
         });
       } else {
         Swal.fire({ icon: 'success', title: 'Approved!', text: 'Existing account has been restored.', confirmButtonColor: '#5c7cfa', timer: 2500, timerProgressBar: true });
@@ -487,13 +577,39 @@ export default function MemberRequestsPage() {
           <h1 className="text-2xl font-bold text-surface-900 dark:text-surface-100">Member Requests</h1>
           <p className="text-surface-500 mt-1">Submit and review directory applications</p>
         </div>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg transition-colors"
-        >
-          {showForm ? <XMarkIcon className="h-5 w-5" /> : <PlusIcon className="h-5 w-5" />}
-          {showForm ? 'Close Form' : 'New Application'}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={handleDownloadTemplate}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-surface-100 dark:bg-dark-hover text-surface-700 dark:text-surface-300 font-medium rounded-lg hover:bg-surface-200 dark:hover:bg-dark-border transition-colors"
+          >
+            <ArrowDownTrayIcon className="h-5 w-5" />
+            Download template
+          </button>
+          <button
+            type="button"
+            onClick={() => bulkInputRef.current?.click()}
+            disabled={importLoading}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-surface-100 dark:bg-dark-hover text-surface-700 dark:text-surface-300 font-medium rounded-lg hover:bg-surface-200 dark:hover:bg-dark-border transition-colors disabled:opacity-50"
+          >
+            <ArrowUpTrayIcon className="h-5 w-5" />
+            {importLoading ? 'Importing...' : 'Bulk import'}
+          </button>
+          <input
+            ref={bulkInputRef}
+            type="file"
+            accept=".xlsx,.xls"
+            className="hidden"
+            onChange={handleBulkImport}
+          />
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg transition-colors"
+          >
+            {showForm ? <XMarkIcon className="h-5 w-5" /> : <PlusIcon className="h-5 w-5" />}
+            {showForm ? 'Close Form' : 'New Application'}
+          </button>
+        </div>
       </div>
 
       <AnimatePresence>
@@ -588,7 +704,7 @@ export default function MemberRequestsPage() {
                     <label className={labelClass}>Area</label>
                     <div
                       onClick={() => setShowAreaDropdown(!showAreaDropdown)}
-                      className={`w-full px-3 py-2 text-sm rounded-lg border cursor-pointer flex items-center justify-between ${form.area_id ? 'border-emerald-400 ring-1 ring-emerald-200 dark:ring-emerald-900/40' : 'border-surface-300 dark:border-dark-border'} bg-white dark:bg-dark-bg text-surface-900 dark:text-surface-100`}
+                      className="w-full px-3 py-2 text-sm rounded-lg border border-surface-300 dark:border-dark-border cursor-pointer flex items-center justify-between bg-white dark:bg-dark-bg text-surface-900 dark:text-surface-100"
                     >
                       <span className={form.area_id ? '' : 'text-surface-400'}>{form.area_id ? getAreaName(form.area_id) : 'Select area...'}</span>
                       <svg className="h-4 w-4 text-surface-400 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
