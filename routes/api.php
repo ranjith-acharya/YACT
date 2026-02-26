@@ -57,6 +57,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('role:Sub-Manager,Manager,Admin,Super Admin')->group(function () {
         Route::post('/member-requests', [MemberRequestController::class, 'store']);
         Route::get('/member-requests', [MemberRequestController::class, 'index']);
+        Route::get('/member-requests/template', [MemberRequestController::class, 'downloadTemplate']);
+        Route::post('/member-requests/bulk-import', [MemberRequestController::class, 'bulkImport']);
         Route::get('/member-requests/{memberRequest}', [MemberRequestController::class, 'show']);
     });
 
